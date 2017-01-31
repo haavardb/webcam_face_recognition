@@ -1,0 +1,5 @@
+gTTS==1.1.8
+playsound==1.2.1
+Pillow==4.0.0
+cv2==1.0
+numpy==1.12.0
