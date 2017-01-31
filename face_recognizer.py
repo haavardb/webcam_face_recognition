@@ -6,6 +6,8 @@ import sys
 import logging as log
 import datetime as dt
 import json
+import progressbar
+
 from playsound import playsound
 from gtts import gTTS
 from time import sleep
@@ -26,27 +28,37 @@ path = './faces'
 
 # Minimum confident that the recognizer has to have to make a match
 # Closer to 0, the more confident
-# I found 43 to be a good number, but this may vary..
-minConf = 43
+# I found 45 to be a good number, but this may vary..
+minConf = 45
+
+secondsBetweenOutput = 10
 
 def get_images_and_labels(path):
 
     image_paths = [os.path.join(path, f) for f in os.listdir(path)  if not f.endswith('.json')]
     images = []
     labels = []
-    for image_path in image_paths:
+    print "Training with sample images.."
+    with progressbar.ProgressBar(max_value=len(image_paths)) as bar:
+        count = 1
+        for image_path in image_paths:
+            bar.update(count)
+            # Read the image and convert to grayscale
+            image_pil = Image.open(image_path).convert('L')
+            image = np.array(image_pil, 'uint8')
+            nbr = int(os.path.split(image_path)[1].split(".")[0].replace("subject", ""))
+            faces = faceCascade.detectMultiScale(image)
+            count = count+1
+            # If face is detected, append the face to images and the label to labels
+            for (x, y, w, h) in faces:
+                images.append(image[y: y + h, x: x + w])
+                labels.append(nbr)
+        # return the images list and labels list
+        return images, labels
 
-        # Read the image and convert to grayscale
-        image_pil = Image.open(image_path).convert('L')
-        image = np.array(image_pil, 'uint8')
-        nbr = int(os.path.split(image_path)[1].split(".")[0].replace("subject", ""))
-        faces = faceCascade.detectMultiScale(image)
-        # If face is detected, append the face to images and the label to labels
-        for (x, y, w, h) in faces:
-            images.append(image[y: y + h, x: x + w])
-            labels.append(nbr)
-    # return the images list and labels list
-    return images, labels
+def seconds_between(d1, d2):
+    return abs((d2 - d1).seconds)
+
 
 # Call the get_images_and_labels function and get the face images and the
 # corresponding labels
@@ -85,17 +97,24 @@ while True:
         predict_image = np.array(cv_gray, 'uint8')
         nbr_predicted, conf = recognizer.predict(predict_image[y: y + h, x: x + w])
 
-        if conf < minConf:
-            with open(path+'/subject'+str(nbr_predicted)+'.json') as data_file:
-                data = json.load(data_file)
-                print "Predicted as: {}, conf: {}".format(data["first_name"].encode('utf-8'), conf)
+        if 'lastMatch' not in locals():
+            lastMatch = 0
+            matchTime = dt.datetime.utcnow()
 
-                sayText = "Heisann " + data["first_name"].encode('utf-8')
-                tts = gTTS(text=sayText, lang='no')
-                tts.save("hello.mp3")
-                playsound('hello.mp3')
-        else:
-            print "No match found..."
+        if conf < minConf:
+            secBtw = seconds_between(matchTime, dt.datetime.utcnow())
+            if (lastMatch != nbr_predicted) or (secBtw > secondsBetweenOutput):
+                with open(path+'/subject'+str(nbr_predicted)+'.json') as data_file:
+                    data = json.load(data_file)
+                    print "Predicted as: {}, conf: {}".format(data["first_name"].encode('utf-8'), conf)
+                    sayText = "Heisann " + data["first_name"].encode('utf-8')
+                    tts = gTTS(text=sayText, lang='no')
+                    tts.save("hello.mp3")
+                    playsound('hello.mp3')
+                    lastMatch = nbr_predicted
+                    matchTime = dt.datetime.utcnow()
+#        else:
+#            print "No match found..."
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
             break
