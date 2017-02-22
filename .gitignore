@@ -1,2 +1,3 @@
 .DS_Store
-hello.mp3
+*.mp3
+google_cloud.json
